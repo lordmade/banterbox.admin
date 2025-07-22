@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Panel</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    :root {
+      --twitter-blue: #1DA1F2;
+      --text-dark: #0F1419;
+      --text-light: #536471;
+      --border: #D8D9DB;
+      --white: #FFFFFF;
+      --background: #F5F8FA;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+      background: var(--background);
+      min-height: 100vh;
+      margin: 0;
+      padding: 0;
+      color: var(--text-dark);
+    }
+
+    .admin-container {
+      max-width: 1200px;
+      margin: 2rem auto;
+      padding: 0 1rem;
+    }
+
+    .user-table {
+      background: var(--white);
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      overflow-x: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    th, td {
+      padding: 0.75rem;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+    }
+
+    th {
+      background: #f5f8fa;
+      font-weight: 600;
+    }
+
+    .verified-badge {
+      width: 16px;
+      height: 16px;
+      vertical-align: middle;
+      fill: var(--twitter-blue);
+      margin-left: 0.25rem;
+    }
+
+    .toggle-btn {
+      padding: 0.5rem 1rem;
+      border: none;
+      border-radius: 20px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s ease, transform 0.2s ease;
+    }
+
+    .toggle-btn.verify {
+      background: var(--twitter-blue);
+      color: var(--white);
+    }
+
+    .toggle-btn.unverify {
+      background: #ffc107;
+      color: var(--text-dark);
+    }
+
+    .toggle-btn:hover {
+      opacity: 0.9;
+      transform: scale(1.05);
+    }
+
+    .custom-alert {
+      display: none;
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: var(--white);
+      padding: 1.5rem 2rem;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      z-index: 1000;
+      color: var(--text-dark);
+      font-weight: 500;
+      text-align: center;
+      max-width: 90%;
+      width: 320px;
+      animation: fadeIn 0.3s ease-out;
+      border: 1px solid var(--border);
+    }
+
+    .custom-alert.active {
+      display: block;
+    }
+
+    .custom-alert .close-btn {
+      position: absolute;
+      top: 0.75rem;
+      right: 0.75rem;
+      width: 24px;
+      height: 24px;
+      background: none;
+      border: none;
+      color: var(--twitter-blue);
+      cursor: pointer;
+      transition: transform 0.2s ease, color 0.2s ease;
+    }
+
+    .custom-alert .close-btn:hover {
+      transform: scale(1.2);
+      color: #1a91da;
+    }
+
+    .custom-alert .close-btn svg {
+      width: 100%;
+      height: 100%;
+    }
+
+    .logout-btn {
+      padding: 0.5rem 1rem;
+      border: none;
+      border-radius: 20px;
+      background: #e0245e;
+      color: var(--white);
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s ease, transform 0.2s ease;
+    }
+
+    .logout-btn:hover {
+      background: #c81e4e;
+      transform: scale(1.05);
+    }
+
+    @keyframes fadeIn {
+      0% { opacity: 0; }
+      100% { opacity: 1; }
+    }
+
+    @media (max-width: 640px) {
+      .admin-container {
+        margin: 1rem;
+      }
+      th, td {
+        font-size: 0.8rem;
+        padding: 0.5rem;
+      }
+      .toggle-btn {
+        padding: 0.4rem 0.8rem;
+        font-size: 0.75rem;
+      }
+      .logout-btn {
+        padding: 0.4rem 0.8rem;
+        font-size: 0.9rem;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="admin-container">
+    <h1 class="text-2xl font-bold mb-4">Admin Panel</h1>
+    <div id="custom-alert" class="custom-alert">
+      <button class="close-btn" onclick="hideAlert()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="18" y1="6" x2="6" y2="18"></line>
+          <line x1="6" y1="6" x2="18" y2="18"></line>
+        </svg>
+      </button>
+      <p id="alert-message"></p>
+    </div>
+    <button id="logoutBtn" class="logout-btn">Logout</button>
+    <div class="user-table" id="userTable">
+      <table>
+        <thead>
+          <tr>
+            <th>Username</th>
+            <th>Handle</th>
+            <th>Verified</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody id="userTableBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/9.6.11/firebase-app.js';
+    import { getAuth, signOut, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/9.6.11/firebase-auth.js';
+    import { getDatabase, ref, get, set } from 'https://www.gstatic.com/firebasejs/9.6.11/firebase-database.js';
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyBOyZ3As4GTuNvjemvPF_SpsC6m6vqtNhc",
+      authDomain: "fire-b-a8878.firebaseapp.com",
+      databaseURL: "https://fire-b-a8878.firebaseio.com",
+      projectId: "fire-b-a8878",
+      storageBucket: "fire-b-a8878.firebasestorage.app",
+      messagingSenderId: "658673187627",
+      appId: "1:658673187627:web:6e4c29af661785f0afa36e",
+      measurementId: "G-V4W97VMSKL"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getDatabase(app);
+
+    const ADMIN_EMAIL = 'katfrans100@gmail.com';
+
+    const userTable = document.getElementById('userTable');
+    const logoutBtn = document.getElementById('logoutBtn');
+    const userTableBody = document.getElementById('userTableBody');
+    const customAlert = document.getElementById('custom-alert');
+    const alertMessage = document.getElementById('alert-message');
+
+    function showAlert(message, autoHide = true) {
+      alertMessage.textContent = message;
+      customAlert.classList.add('active');
+      if (autoHide) {
+        setTimeout(hideAlert, 5000);
+      }
+    }
+
+    function hideAlert() {
+      customAlert.classList.remove('active');
+    }
+
+    // Check admin status
+    onAuthStateChanged(auth, async (user) => {
+      if (!user) {
+        showAlert('Please log in to access the admin panel.', false);
+        setTimeout(() => {
+          window.location.href = 'admin-login.html';
+        }, 3000);
+      } else if (user.email !== ADMIN_EMAIL) {
+        showAlert('Access denied. Only katfrans100@gmail.com can access this page.', false);
+        await signOut(auth);
+        setTimeout(() => {
+          window.location.href = 'index.html';
+        }, 3000);
+      } else {
+        userTable.style.display = 'block';
+        logoutBtn.style.display = 'block';
+        loadUsers();
+      }
+    });
+
+    // Logout functionality
+    logoutBtn.addEventListener('click', () => {
+      signOut(auth).then(() => {
+        window.location.href = 'admin-login.html';
+      }).catch((error) => {
+        showAlert('Logout failed: ' + error.message, false);
+      });
+    });
+
+    // Load users into table
+    async function loadUsers() {
+      userTableBody.innerHTML = '';
+      try {
+        const snapshot = await get(ref(db, 'users'));
+        const users = snapshot.val();
+        if (!users) {
+          showAlert('No users found.', false);
+          return;
+        }
+        for (const [userId, userData] of Object.entries(users)) {
+          const row = document.createElement('tr');
+          row.innerHTML = `
+            <td>${userData.username || 'Anonymous'}</td>
+            <td>${userData.handle ? '@' + userData.handle : ''}</td>
+            <td>
+              ${userData.verified ? `
+                <svg class="verified-badge" viewBox="0 0 24 24" aria-label="Verified account">
+                  <path d="M22.5 12.5c0-1.58-.875-2.95-2.148-3.6.154-.757.062-1.58-.318-2.3-.35-.633-1.05-1.067-1.8-1.067-.933 0-1.733.467-2.1 1.2-.583.933-1.567 1.533-2.633 1.533-1.067 0-2.05-.6-2.633-1.533-.367-.733-1.167-1.2-2.1-1.2-.75 0-1.45.433-1.8 1.067-.38.72-.472 1.543-.318 2.3-1.273.65-2.148 2.017-2.148 3.6 0 1.58.875 2.95 2.148 3.6-.154.757-.062 1.58.318 2.3.35.633 1.05 1.067 1.8 1.067.933 0 1.733-.467 2.1-1.2.583-.933 1.567-1.533 2.633-1.533 1.067 0 2.05.6 2.633 1.533.367.733 1.167 1.2 2.1 1.2.75 0 1.45-.433 1.8-1.067.38-.72.472-1.543.318-2.3 1.273-.65 2.148-2.017 2.148-3.6zM9.9 14.9l-2.3-2.3 1.4-1.4 2.3 2.3 4.7-4.7 1.4 1.4-6.1 6.1z"/>
+                </svg>
+              ` : 'Not Verified'}
+            </td>
+            <td>
+              <button class="toggle-btn ${userData.verified ? 'unverify' : 'verify'}" data-user-id="${userId}">
+                ${userData.verified ? 'Unverify' : 'Verify'}
+              </button>
+            </td>
+          `;
+          userTableBody.appendChild(row);
+        }
+
+        // Add event listeners for toggle buttons
+        document.querySelectorAll('.toggle-btn').forEach(btn => {
+          btn.addEventListener('click', async () => {
+            const userId = btn.dataset.userId;
+            const isVerified = btn.textContent === 'Unverify';
+            try {
+              await set(ref(db, `users/${userId}/verified`), !isVerified);
+              showAlert(`User ${isVerified ? 'unverified' : 'verified'} successfully!`, true);
+              loadUsers();
+            } catch (error) {
+              showAlert('Failed to update verification status: ' + error.message, false);
+            }
+          });
+        });
+      } catch (error) {
+        showAlert('Failed to load users: ' + error.message, false);
+      }
+    }
+  </script>
+</body>
+</html>
